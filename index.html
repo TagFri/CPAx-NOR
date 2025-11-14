@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CPAx-NOR</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f7;
+      color: #111827;
+      text-align: center;
+    }
+
+    .page {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 0.2rem;
+      font-size: 1.8rem;
+    }
+
+    p.subtitle {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      color: #4b5563;
+      font-size: 0.95rem;
+    }
+
+    .layout {
+      display: flex;
+      align-items: flex-start;
+      gap: 28px;
+      @media (max-width: 1000px) {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+
+    .left-panel {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+      min-width: 320px;
+      text-align: left;
+    }
+
+    .inputs-header {
+      display: grid;
+      grid-template-columns: 2fr 0.5fr 0.5fr;
+      column-gap: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #6b7280;
+      margin-bottom: 6px;
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 2fr 0.5fr 0.5fr;
+      column-gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+    }
+
+    .input-row label {
+      padding-right: 4px;
+      line-height: 1.2;
+      text-align: left;
+    }
+
+    .input-row input[type="number"] {
+      width: 100%;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      font-size: 0.85rem;
+      box-sizing: border-box;
+    }
+
+    .input-row input[type="number"]:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px rgba(37,99,235,0.3);
+    }
+
+    .left-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: none;
+      border-radius: 18px;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      background: #2563eb;
+      color: #fff;
+    }
+
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-wrapper {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+      width: 500px;
+      max-width: 100%;
+      height: 380px;
+      box-sizing: border-box;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .status {
+      font-size: 0.8rem;
+      min-height: 1.1em;
+      color: #16a34a;
+      margin-top: 4px;
+    }
+
+    .status.error {
+      color: #dc2626;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+<h1>CPAx-NOR</h1>
+<p class="subtitle">Eldste verdier (rød) vs nyeste verdier (grønn).</p>
+
+<div class="layout">
+  <!-- LEFT: inputs -->
+  <div class="left-panel">
+    <div class="inputs-header">
+      <span>Komponent</span>
+      <span>Gammel</span>
+      <span>Ny</span>
+    </div>
+    <div id="inputsContainer"></div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <!-- RIGHT: chart + copy button -->
+  <div class="right-panel">
+    <div class="chart-wrapper">
+      <canvas id="radarChart"></canvas>
+    </div>
+    <button id="copyBtn">Kopier graf</button>
+    <button id="resetBtn" class="secondary">Tilbakestill</button>
+  </div>
+</div>
+
+<script>
+  const labels = [
+    'Respiratorisk funksjon',
+    'Hoste',
+    'Forflytning i seng',
+    ['Liggende til sittende', 'på sengekanten'],
+    'Sittebalanse',
+    'Stående balanse',
+    'Sittende til stående',
+    'Forflytning seng', 'til stol',
+    'Gange',
+    'Gripestyrke'
+  ];
+
+  const NUM_PROPERTIES = labels.length;
+  const inputsContainer = document.getElementById('inputsContainer');
+
+  // Build input rows: label + old + new
+  for (let i = 0; i < NUM_PROPERTIES; i++) {
+    const row = document.createElement('div');
+    row.className = 'input-row';
+
+    const labelEl = document.createElement('label');
+    labelEl.textContent = labels[i];
+
+    const oldInput = document.createElement('input');
+    oldInput.type = 'number';
+    oldInput.min = '0';
+    oldInput.max = '5';
+    oldInput.step = '1';
+    oldInput.value = '0';
+    oldInput.id = `old-${i}`;
+
+    const newInput = document.createElement('input');
+    newInput.type = 'number';
+    newInput.min = '0';
+    newInput.max = '5';
+    newInput.step = '1';
+    newInput.value = '0';
+    newInput.id = `new-${i}`;
+
+    row.appendChild(labelEl);
+    row.appendChild(oldInput);
+    row.appendChild(newInput);
+    inputsContainer.appendChild(row);
+  }
+
+  const ctx = document.getElementById('radarChart').getContext('2d');
+
+  // Initial chart with two line-only datasets
+  let radarChart = new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Gammel',
+          data: new Array(NUM_PROPERTIES).fill(0),
+          borderColor: 'rgba(239, 68, 68, 0.5)',   // red
+          backgroundColor: 'rgba(0,0,0,0)',      // no fill
+          pointBackgroundColor: 'rgba(239, 68, 68, 1)',
+          pointRadius: 1,
+          borderWidth: 2,
+          fill: false
+        },
+        {
+          label: 'Ny',
+          data: new Array(NUM_PROPERTIES).fill(0),
+          borderColor: 'rgba(34, 197, 94, 1)',   // green
+          backgroundColor: 'rgba(0,0,0,0)',      // no fill
+          pointBackgroundColor: 'rgba(34, 197, 94, 1)',
+          pointRadius: 1,
+          borderWidth: 2,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        r: {
+          suggestedMin: 0,
+          suggestedMax: 5,
+          ticks: {
+            stepSize: 1
+          },
+          angleLines: {
+            color: '#e5e7eb'
+          },
+          grid: {
+            color: '#e5e7eb'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top'
+        }
+      }
+    }
+  });
+
+  function showStatus(message, isError = false) {
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = message;
+    statusEl.classList.toggle('error', isError);
+  }
+
+  function clearStatus() {
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = '';
+    statusEl.classList.remove('error');
+  }
+
+  function readInputs() {
+    const oldVals = [];
+    const newVals = [];
+    let hadError = false;
+
+    for (let i = 0; i < NUM_PROPERTIES; i++) {
+      const oldInput = document.getElementById(`old-${i}`);
+      const newInput = document.getElementById(`new-${i}`);
+
+      let oldVal = Number(oldInput.value);
+      let newVal = Number(newInput.value);
+
+      if (Number.isNaN(oldVal)) oldVal = 0;
+      if (Number.isNaN(newVal)) newVal = 0;
+
+      if (oldVal < 0) { oldVal = 0; hadError = true; }
+      if (oldVal > 5) { oldVal = 5; hadError = true; }
+
+      if (newVal < 0) { newVal = 0; hadError = true; }
+      if (newVal > 5) { newVal = 5; hadError = true; }
+
+      oldInput.value = oldVal;
+      newInput.value = newVal;
+
+      oldVals.push(oldVal);
+      newVals.push(newVal);
+    }
+
+    if (hadError) {
+      showStatus('Noen verdier var utenfor 0–5 og ble justert.', true);
+    } else {
+      clearStatus();
+    }
+
+    return { oldVals, newVals };
+  }
+
+  function updateChart() {
+    const { oldVals, newVals } = readInputs();
+    radarChart.data.datasets[0].data = oldVals;
+    radarChart.data.datasets[1].data = newVals;
+    radarChart.update();
+  }
+
+  function resetAll() {
+    for (let i = 0; i < NUM_PROPERTIES; i++) {
+      document.getElementById(`old-${i}`).value = '0';
+      document.getElementById(`new-${i}`).value = '0';
+    }
+    updateChart();
+    showStatus('Alle verdier satt til 0.');
+  }
+
+  async function copyChartToClipboard() {
+    const canvas = document.getElementById('radarChart');
+
+    if (!navigator.clipboard || typeof window.ClipboardItem === 'undefined') {
+      showStatus('Nettleseren støtter ikke kopiering av bilder direkte. Høyreklikk grafen og velg "Kopier bilde".', true);
+      return;
+    }
+
+    try {
+      // Pakk canvas.toBlob i en Promise så vi kan bruke await
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error('toBlob returnerte null'));
+        }, 'image/png');
+      });
+
+      const item = new ClipboardItem({ 'image/png': blob });
+      await navigator.clipboard.write([item]);
+      showStatus('Graf kopiert til utklippstavlen ✅');
+    } catch (err) {
+      console.error(err);
+      showStatus('Feil ved kopiering. Sjekk nettleser-tillatelser.', true);
+    }
+  }
+
+  // Auto-update på input
+  inputsContainer.addEventListener('input', (event) => {
+    if (event.target.tagName === 'INPUT') {
+      updateChart();
+    }
+  });
+
+  // Knapper
+  document.getElementById('resetBtn').addEventListener('click', resetAll);
+  document.getElementById('copyBtn').addEventListener('click', copyChartToClipboard);
+
+  // Initial render
+  updateChart();
+</script>
+</div>
+</body>
+</html>
