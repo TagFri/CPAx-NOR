@@ -187,7 +187,7 @@
     'Sittebalanse',
     'Stående balanse',
     'Sittende til stående',
-    ['Forflytning seng ', 'til stol'],
+    ['Forflytning ', 'seng til stol'],
     'Gange',
     'Gripestyrke'
   ];
@@ -202,6 +202,7 @@
 
     const labelEl = document.createElement('label');
     labelEl.textContent = labels[i];
+    labelEl.textContent = labelEl.textContent.replace(/,/g, "");
 
     const oldInput = document.createElement('input');
     oldInput.type = 'number';
